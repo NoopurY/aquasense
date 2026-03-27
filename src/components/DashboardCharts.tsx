@@ -38,7 +38,7 @@ export function DashboardCharts({ dailyUsage, slabDistribution }: Props) {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <section className="glass-card lg:col-span-2">
-        <h3 className="mb-4 text-xl font-semibold text-white">Flow Rate · Last Hour</h3>
+        <h3 className="mb-4 text-xl font-semibold text-white">Flow Pattern · Last Hour</h3>
         <div className="h-72">
           <ResponsiveContainer>
             <LineChart data={hourlyPreview}>
@@ -81,7 +81,7 @@ export function DashboardCharts({ dailyUsage, slabDistribution }: Props) {
       </section>
 
       <section className="glass-card lg:col-span-3">
-        <h3 className="mb-4 text-xl font-semibold text-white">Daily Water Usage</h3>
+        <h3 className="mb-4 text-xl font-semibold text-white">Daily Water Usage Trend</h3>
         <div className="h-72">
           <ResponsiveContainer>
             <BarChart data={dailyUsage}>

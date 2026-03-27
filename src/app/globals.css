@@ -3,12 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --bg-1: #01091f;
-  --bg-2: #001a3e;
-  --bg-3: #062f62;
-  --glow: #41edff;
+  --bg-1: #020817;
+  --bg-2: #04253f;
+  --bg-3: #0b4f6c;
+  --glow: #4ce7ff;
+  --accent: #0ea5e9;
+  --accent-2: #22d3ee;
   --panel: rgba(7, 24, 56, 0.62);
   --text: #f4fbff;
+  --font-display: var(--font-sora);
+  --font-body: var(--font-manrope);
 }
 
 * {
@@ -24,7 +28,15 @@ body {
     radial-gradient(circle at 20% -10%, rgba(34, 183, 255, 0.45), transparent 42%),
     radial-gradient(circle at 80% -5%, rgba(67, 238, 255, 0.22), transparent 36%),
     linear-gradient(160deg, var(--bg-1) 10%, var(--bg-2) 46%, var(--bg-1) 100%);
-  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), "Segoe UI", sans-serif;
+  letter-spacing: -0.02em;
 }
 
 body::before,
@@ -50,13 +62,22 @@ body::after {
 
 .glass-card {
   border: 1px solid rgba(130, 225, 255, 0.2);
-  border-radius: 18px;
+  border-radius: 22px;
   background: linear-gradient(170deg, rgba(8, 29, 64, 0.75), rgba(2, 14, 40, 0.65));
   box-shadow:
     inset 0 0 0 1px rgba(84, 226, 255, 0.06),
-    0 14px 40px rgba(0, 8, 28, 0.45);
+    0 18px 44px rgba(0, 8, 28, 0.45);
   backdrop-filter: blur(10px);
-  padding: 1.2rem;
+  padding: 1.3rem;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(130, 225, 255, 0.38);
+  box-shadow:
+    inset 0 0 0 1px rgba(84, 226, 255, 0.1),
+    0 24px 48px rgba(0, 8, 28, 0.52);
 }
 
 .wave-divider {
@@ -67,10 +88,10 @@ body::after {
 
 .metric-card {
   border: 1px solid rgba(114, 223, 255, 0.23);
-  border-radius: 16px;
+  border-radius: 20px;
   background: var(--panel);
-  box-shadow: 0 0 1rem rgba(48, 202, 255, 0.15);
-  padding: 1rem;
+  box-shadow: 0 10px 30px rgba(48, 202, 255, 0.14);
+  padding: 1.05rem;
 }
 
 input,
@@ -79,8 +100,53 @@ button {
   font: inherit;
 }
 
+.aqua-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 227, 255, 0.35);
+  background: linear-gradient(110deg, var(--accent-2), var(--accent));
+  color: #052033;
+  font-weight: 700;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.aqua-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+
+.aqua-btn:disabled {
+  opacity: 0.72;
+  transform: none;
+  cursor: not-allowed;
+}
+
+.aqua-outline-btn {
+  border-radius: 12px;
+  border: 1px solid rgba(130, 225, 255, 0.55);
+  background: rgba(2, 20, 46, 0.4);
+  color: #caf4ff;
+}
+
+.fade-up {
+  animation: fade-up 420ms ease both;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media (max-width: 768px) {
   .glass-card {
-    border-radius: 14px;
+    border-radius: 16px;
   }
 }

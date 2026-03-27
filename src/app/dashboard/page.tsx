@@ -79,7 +79,8 @@ export default async function DashboardPage() {
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <AquaLogo compact />
-          <p className="mt-2 text-sm text-cyan-100/80">Welcome back, {user.fullName}. Your telemetry and slab billing are live.</p>
+          <p className="mt-3 text-xs uppercase tracking-[0.18em] text-cyan-200/75">Control Center</p>
+          <p className="mt-1 text-sm text-cyan-100/80">Welcome back, {user.fullName}. Your telemetry and slab billing are live.</p>
         </div>
         <div className="flex items-center gap-3">
           <SeedDataButton />
@@ -90,26 +91,26 @@ export default async function DashboardPage() {
       <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article className="metric-card">
           <p className="text-sm text-cyan-200/80">Current Flow Rate</p>
-          <p className="text-3xl font-bold">{metricLabel(lastReading?.flowRate ?? 0)} L/min</p>
+          <p className="mt-1 text-3xl font-bold">{metricLabel(lastReading?.flowRate ?? 0)} L/min</p>
         </article>
         <article className="metric-card">
           <p className="text-sm text-cyan-200/80">Total Usage (Month)</p>
-          <p className="text-3xl font-bold">{metricLabel(monthLiters)} Liters</p>
+          <p className="mt-1 text-3xl font-bold">{metricLabel(monthLiters)} Liters</p>
         </article>
         <article className="metric-card">
           <p className="text-sm text-cyan-200/80">Today&apos;s Usage</p>
-          <p className="text-3xl font-bold">{metricLabel(todayLiters)} Liters</p>
+          <p className="mt-1 text-3xl font-bold">{metricLabel(todayLiters)} Liters</p>
         </article>
         <article className="metric-card">
           <p className="text-sm text-cyan-200/80">Estimated Bill (30 Days)</p>
-          <p className="text-3xl font-bold">Rs {metricLabel(bill.total)}</p>
+          <p className="mt-1 text-3xl font-bold">Rs {metricLabel(bill.total)}</p>
         </article>
       </section>
 
       <section className="mb-6 grid gap-6 lg:grid-cols-3">
         <article className="glass-card lg:col-span-2">
           <h3 className="mb-4 text-2xl font-semibold">Slab Billing Summary</h3>
-          <div className="space-y-2 text-cyan-100">
+          <div className="space-y-2 text-cyan-100 md:text-[1.02rem]">
             <p>Usage this month: {bill.usageKL.toFixed(2)} KL</p>
             <p>First 8 KL: Rs {bill.first8.toFixed(2)}</p>
             <p>Next 12 KL: Rs {bill.next12.toFixed(2)}</p>

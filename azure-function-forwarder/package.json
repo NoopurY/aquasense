@@ -1,0 +1,14 @@
+{
+  "name": "azure-function-forwarder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Azure Function Event Hub forwarder for AquaSense",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/event-hubs": "^6.0.3",
+    "node-fetch": "^3.3.2"
+  }
+}

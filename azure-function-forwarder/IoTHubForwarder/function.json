@@ -1,0 +1,13 @@
+{
+  "bindings": [
+    {
+      "type": "eventHubTrigger",
+      "name": "events",
+      "direction": "in",
+      "cardinality": "many",
+      "consumerGroup": "$Default",
+      "eventHubName": "iothub-ehub-aquasense-56175572-174f944317",
+      "connection": "EVENTHUB_CONNECTION"
+    }
+  ]
+}

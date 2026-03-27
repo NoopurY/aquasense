@@ -37,10 +37,11 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-5 py-8">
-      <section className="glass-card w-full">
+      <section className="glass-card fade-up w-full">
         <div className="mb-6 flex justify-center">
           <AquaLogo />
         </div>
+        <p className="mb-2 text-center text-xs uppercase tracking-[0.2em] text-cyan-200/75">Secure Access</p>
         <h1 className="mb-5 text-center text-3xl font-bold">Welcome Back</h1>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block text-sm text-cyan-100/90">
@@ -66,7 +67,7 @@ export default function LoginPage() {
             />
           </label>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
-          <button className="w-full rounded-lg bg-gradient-to-r from-cyan-300 to-blue-500 px-4 py-3 font-semibold text-slate-950" disabled={loading} type="submit">
+          <button className="aqua-btn w-full px-4 py-3" disabled={loading} type="submit">
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>

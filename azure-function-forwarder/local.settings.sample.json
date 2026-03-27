@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "EVENTHUB_CONNECTION": "<PASTE_IOTHUB_EVENTHUB_COMPATIBLE_CONNECTION_STRING>",
+    "APP_ENDPOINT": "https://aquasense-teal.vercel.app/api/telemetry/azure",
+    "WEBHOOK_KEY": "aqs-webhook-2026"
+  }
+}
