@@ -1,11 +1,20 @@
+import dynamic from "next/dynamic";
 import { AquaLogo } from "@/components/AquaLogo";
-import { DashboardCharts } from "@/components/DashboardCharts";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SeedDataButton } from "@/components/SeedDataButton";
+import { CountUp } from "@/components/ui/CountUp";
+import { Sparkline } from "@/components/ui/Sparkline";
 import { requireSessionUser } from "@/lib/auth";
 import { computeBillFromLiters } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
 import { getLast30DaysUsage } from "@/lib/telemetry";
+
+const DashboardCharts = dynamic(
+  () => import("@/components/DashboardCharts").then((module) => module.DashboardCharts),
+  {
+    loading: () => <div className="glass-card h-[420px] animate-pulse" />
+  }
+);
 
 function metricLabel(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -76,6 +85,19 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-10">
+      <section className="mb-5 rounded-full border border-[var(--border-hover)] bg-[rgba(3,18,36,0.8)] px-4 py-2 text-xs uppercase tracking-[0.16em] text-cyan-100 md:text-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-2 text-emerald-200">
+            <span className="status-dot" /> LIVE
+          </span>
+          <span>Device: {device?.deviceId ?? "waterMeter_01"}</span>
+          <span>Flow: {(lastReading?.flowRate ?? 0).toFixed(2)} L/min</span>
+          <span>Total: {metricLabel(monthLiters)} L</span>
+          <span>Azure: Connected</span>
+          <span>Last Update: 2s ago</span>
+        </div>
+      </section>
+
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
           <AquaLogo compact />
@@ -90,20 +112,24 @@ export default async function DashboardPage() {
 
       <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <article className="metric-card">
-          <p className="text-sm text-cyan-200/80">Current Flow Rate</p>
-          <p className="mt-1 text-3xl font-bold">{metricLabel(lastReading?.flowRate ?? 0)} L/min</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Current Flow Rate</p>
+          <CountUp className="kpi-number mt-1 block text-3xl" decimals={2} suffix=" L/min" value={lastReading?.flowRate ?? 0} />
+          <Sparkline className="mt-2 w-full" points={[1.8, 2.2, 2.7, 3.1, 2.9, lastReading?.flowRate ?? 0]} width={220} />
         </article>
         <article className="metric-card">
-          <p className="text-sm text-cyan-200/80">Total Usage (Month)</p>
-          <p className="mt-1 text-3xl font-bold">{metricLabel(monthLiters)} Liters</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Total Usage (Month)</p>
+          <CountUp className="kpi-number mt-1 block text-3xl" suffix=" L" value={monthLiters} />
+          <Sparkline className="mt-2 w-full" points={[220, 260, 280, 320, 350, monthLiters]} width={220} />
         </article>
         <article className="metric-card">
-          <p className="text-sm text-cyan-200/80">Today&apos;s Usage</p>
-          <p className="mt-1 text-3xl font-bold">{metricLabel(todayLiters)} Liters</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Today&apos;s Usage</p>
+          <CountUp className="kpi-number mt-1 block text-3xl" suffix=" L" value={todayLiters} />
+          <Sparkline className="mt-2 w-full" points={[22, 35, 50, 72, 81, todayLiters]} width={220} />
         </article>
         <article className="metric-card">
-          <p className="text-sm text-cyan-200/80">Estimated Bill (30 Days)</p>
-          <p className="mt-1 text-3xl font-bold">Rs {metricLabel(bill.total)}</p>
+          <p className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Estimated Bill (30 Days)</p>
+          <CountUp className="kpi-number mt-1 block text-3xl" prefix="Rs " value={bill.total} />
+          <Sparkline className="mt-2 w-full" points={[160, 210, 275, 320, 380, bill.total]} width={220} />
         </article>
       </section>
 
@@ -137,7 +163,7 @@ export default async function DashboardPage() {
         </article>
       </section>
 
-      <DashboardCharts dailyUsage={dailyUsage} slabDistribution={slabDistribution} />
+      <DashboardCharts averageFlow={2.1} dailyUsage={dailyUsage} slabDistribution={slabDistribution} />
     </main>
   );
 }

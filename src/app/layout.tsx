@@ -1,17 +1,23 @@
 import type { Metadata } from "next";
-import { Manrope, Sora } from "next/font/google";
+import { Exo_2, Rajdhani, Share_Tech_Mono } from "next/font/google";
 import "./globals.css";
 
-const sora = Sora({
+const rajdhani = Rajdhani({
   subsets: ["latin"],
-  variable: "--font-sora",
-  weight: ["400", "600", "700"]
+  variable: "--font-rajdhani",
+  weight: ["500", "600", "700"]
 });
 
-const manrope = Manrope({
+const exo2 = Exo_2({
   subsets: ["latin"],
-  variable: "--font-manrope",
-  weight: ["400", "500", "600", "700"]
+  variable: "--font-exo2",
+  weight: ["300", "400", "500", "600", "700"]
+});
+
+const shareTechMono = Share_Tech_Mono({
+  subsets: ["latin"],
+  variable: "--font-code",
+  weight: ["400"]
 });
 
 export const metadata: Metadata = {
@@ -22,7 +28,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${sora.variable} ${manrope.variable}`}>{children}</body>
+      <body className={`${rajdhani.variable} ${exo2.variable} ${shareTechMono.variable}`}>{children}</body>
     </html>
   );
 }

@@ -7,9 +7,9 @@ type AquaLogoProps = {
 
 export function AquaLogo({ compact = false }: AquaLogoProps) {
   return (
-    <Link className="inline-flex items-center gap-3" href="/">
+    <Link className="inline-flex items-center gap-3 logo-breathing" href="/">
       <Image alt="AquaSave logo" height={compact ? 38 : 52} priority src="/aquasave-logo.svg" width={compact ? 38 : 52} />
-      <span className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
+      <span className="text-2xl font-bold tracking-tight text-white md:text-3xl">
         Aqua<span className="text-cyan-300">Save</span>
       </span>
     </Link>
