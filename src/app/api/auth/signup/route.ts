@@ -19,7 +19,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid signup details." }, { status: 400 });
     }
 
-    const email = parsed.data.email.toLowerCase();
+    const email = parsed.data.email.trim().toLowerCase();
+    const fullName = parsed.data.fullName.trim();
+
+    if (fullName.length < 2) {
+      return NextResponse.json({ error: "Invalid signup details." }, { status: 400 });
+    }
+
     const existing = await prisma.user.findUnique({ where: { email } });
 
     if (existing) {
@@ -30,7 +36,7 @@ export async function POST(request: Request) {
 
     const createdUser = await prisma.user.create({
       data: {
-        fullName: parsed.data.fullName,
+        fullName,
         email,
         passwordHash,
         devices: {

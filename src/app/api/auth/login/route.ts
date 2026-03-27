@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authCookie, signAuthToken, verifyPassword } from "@/lib/auth";
+import { authCookie, hashPassword, signAuthToken, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const loginSchema = z.object({
@@ -17,13 +17,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid login details." }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: parsed.data.email.toLowerCase() } });
+    const normalizedEmail = parsed.data.email.trim().toLowerCase();
+    const plainPassword = parsed.data.password;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: normalizedEmail,
+          mode: "insensitive"
+        }
+      }
+    });
 
     if (!user) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 
-    const validPassword = await verifyPassword(parsed.data.password, user.passwordHash);
+    let validPassword = false;
+
+    // Backward compatibility: older records may have stored plaintext passwords.
+    if (user.passwordHash.startsWith("$2")) {
+      validPassword = await verifyPassword(plainPassword, user.passwordHash);
+    } else {
+      validPassword = user.passwordHash === plainPassword;
+
+      if (validPassword) {
+        const upgradedHash = await hashPassword(plainPassword);
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash: upgradedHash }
+        });
+      }
+    }
+
     if (!validPassword) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
