@@ -32,8 +32,9 @@ type Props = {
 
 const slabColors = ["#00e5ff", "#1e90ff", "#ffb300"];
 
-function innerFormatter(value: number): string {
-  return `Rs ${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+function innerFormatter(value: number | string | undefined): string {
+  const numericValue = typeof value === "number" ? value : Number(value ?? 0);
+  return `Rs ${numericValue.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
 function buildHourlySeries() {
@@ -114,7 +115,7 @@ function DashboardChartsImpl({ dailyUsage, slabDistribution, averageFlow = 2.1 }
                   <Cell fill={slabColors[index % slabColors.length]} key={entry.name} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => innerFormatter(value)} />
+              <Tooltip formatter={(value) => innerFormatter(value)} />
               <Legend />
               <text x="50%" y="49%" textAnchor="middle" fill="#9fdcff" fontSize={12}>
                 TOTAL
