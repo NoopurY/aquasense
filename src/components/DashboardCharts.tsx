@@ -32,8 +32,9 @@ type Props = {
 
 const slabColors = ["#00e5ff", "#1e90ff", "#ffb300"];
 
-function innerFormatter(value: number | string | undefined): string {
-  const numericValue = typeof value === "number" ? value : Number(value ?? 0);
+function innerFormatter(value: number | string | ReadonlyArray<string | number> | undefined): string {
+  const resolved = Array.isArray(value) ? value[0] : value;
+  const numericValue = typeof resolved === "number" ? resolved : Number(resolved ?? 0);
   return `Rs ${numericValue.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 }
 
