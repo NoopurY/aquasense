@@ -11,7 +11,7 @@ const char* WIFI_PASSWORD = "1206NOOPUR";
 const char* TELEMETRY_URL = "http://192.168.137.1:3000/api/telemetry/ingest";
 
 // Required by AquaSense ingest route as x-device-token or Bearer token.
-const char* DEVICE_TOKEN = "REPLACE_WITH_DEVICE_TOKEN";
+const char* DEVICE_TOKEN = "f8db8f2e0f7b4054b54619535c2454eb";
 
 /* ---------------- PIN DEFINITIONS ---------------- */
 #define FLOW_SENSOR_PIN 27
@@ -21,6 +21,7 @@ const char* DEVICE_TOKEN = "REPLACE_WITH_DEVICE_TOKEN";
 /* ---------------- FLOW VARIABLES ---------------- */
 volatile uint32_t totalPulses = 0;
 volatile uint32_t windowPulses = 0;
+volatile uint32_t lastPulseMicros = 0;
 
 float flowRateLMin = 0.0f;
 float totalLiters = 0.0f;
@@ -28,6 +29,11 @@ float litersThisCycle = 0.0f;
 
 unsigned long previousFlowMillis = 0;
 const unsigned long flowIntervalMs = 1000;
+const unsigned long wifiRetryIntervalMs = 15000;
+const unsigned long wifiConnectTimeoutMs = 12000;
+unsigned long lastWiFiBeginMs = 0;
+unsigned long wifiAttemptStartMs = 0;
+bool wifiConnectInProgress = false;
 
 // YF-S201 pulses per liter. Tune for your sensor.
 float calibrationFactor = 450.0f;
@@ -36,6 +42,7 @@ float targetVolume = 0.5f;
 
 bool filling = false;
 uint32_t cycleStartPulses = 0;
+unsigned long lastFillLogMs = 0;
 
 /* ---------------- BUTTON DEBOUNCE ---------------- */
 bool lastButtonReading = HIGH;
@@ -45,6 +52,13 @@ const unsigned long debounceMs = 40;
 
 /* ---------------- INTERRUPT ---------------- */
 void IRAM_ATTR pulseCounter() {
+  // Ignore sub-millisecond spikes caused by electrical noise.
+  uint32_t nowUs = micros();
+  if (nowUs - lastPulseMicros < 800) {
+    return;
+  }
+  lastPulseMicros = nowUs;
+
   totalPulses++;
   windowPulses++;
 }
@@ -71,26 +85,60 @@ void setPump(bool on) {
 }
 
 void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
+  wl_status_t status = WiFi.status();
+
+  if (status == WL_CONNECTED) {
+    wifiConnectInProgress = false;
     return;
   }
 
-  Serial.print("Connecting WiFi");
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  unsigned long now = millis();
 
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED && (millis() - start) < 15000) {
-    delay(400);
-    Serial.print(".");
+  // If a connect attempt is in progress, wait for success or timeout.
+  if (wifiConnectInProgress) {
+    if (status == WL_CONNECTED) {
+      wifiConnectInProgress = false;
+      return;
+    }
+
+    if (now - wifiAttemptStartMs < wifiConnectTimeoutMs) {
+      return;
+    }
+
+    Serial.println("WiFi connect timeout");
+    wifiConnectInProgress = false;
+    WiFi.disconnect();
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi Connected");
+  if (now - lastWiFiBeginMs < wifiRetryIntervalMs) {
+    return;
+  }
+
+  lastWiFiBeginMs = now;
+  wifiAttemptStartMs = now;
+  wifiConnectInProgress = true;
+
+  Serial.print("Connecting WiFi to ");
+  Serial.println(WIFI_SSID);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+}
+
+void logWiFiStatus() {
+  static wl_status_t lastStatus = WL_NO_SHIELD;
+  wl_status_t status = WiFi.status();
+
+  if (status == lastStatus) {
+    return;
+  }
+  lastStatus = status;
+
+  if (status == WL_CONNECTED) {
+    Serial.println("WiFi Connected");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\nWiFi connect timeout");
+    Serial.print("WiFi status changed: ");
+    Serial.println((int)status);
   }
 }
 
@@ -144,9 +192,12 @@ void updateFlowRate() {
   float litersInWindow = pulses / calibrationFactor;
   flowRateLMin = litersInWindow * (60000.0f / elapsed);
 
-  Serial.print("Flow Rate: ");
-  Serial.print(flowRateLMin, 3);
-  Serial.println(" L/min");
+  // Show flow continuously only while filling to avoid idle confusion.
+  if (filling) {
+    Serial.print("Flow Rate: ");
+    Serial.print(flowRateLMin, 3);
+    Serial.println(" L/min");
+  }
 }
 
 void handleButton() {
@@ -164,6 +215,7 @@ void handleButton() {
       Serial.println("Filling Bottle...");
       cycleStartPulses = readTotalPulses();
       litersThisCycle = 0.0f;
+      lastFillLogMs = 0;
       filling = true;
       setPump(true);
     }
@@ -179,9 +231,15 @@ void updateFilling() {
   uint32_t cyclePulses = current - cycleStartPulses;
   litersThisCycle = cyclePulses / calibrationFactor;
 
-  Serial.print("Filled: ");
-  Serial.print(litersThisCycle, 3);
-  Serial.println(" L");
+  unsigned long now = millis();
+  if (now - lastFillLogMs >= 500) {
+    lastFillLogMs = now;
+    Serial.print("Pulses: ");
+    Serial.print((unsigned long)cyclePulses);
+    Serial.print(" | Filled: ");
+    Serial.print(litersThisCycle, 3);
+    Serial.println(" L");
+  }
 
   if (litersThisCycle >= targetVolume) {
     setPump(false);
@@ -202,17 +260,22 @@ void updateFilling() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(FLOW_SENSOR_PIN, INPUT);
+  WiFi.mode(WIFI_STA);
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(true);
+
+  pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
   pinMode(RELAY_PIN, OUTPUT);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   setPump(false);
-  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, RISING);
+  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, FALLING);
 
   connectWiFi();
   previousFlowMillis = millis();
 
   Serial.println("AquaSense ESP32 ready");
+  Serial.println("Press button on GPIO25 to start motor and pulse counting");
 }
 
 /* ---------------- LOOP ---------------- */
@@ -227,6 +290,7 @@ void loop() {
   if (now - lastReconnectCheck > 5000) {
     lastReconnectCheck = now;
     connectWiFi();
+    logWiFiStatus();
   }
 
   delay(20);
