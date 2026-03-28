@@ -1,181 +1,233 @@
 #include <WiFi.h>
-#include <PubSubClient.h>
-#include <ArduinoJson.h>
-#include <time.h>
+#include <HTTPClient.h>
 
-// ===== WiFi Configuration =====
+/* ---------------- WIFI SETTINGS ---------------- */
 const char* WIFI_SSID = "NOOPUR Y";
 const char* WIFI_PASSWORD = "1206NOOPUR";
 
-// ===== Azure IoT Hub Configuration =====
-// Get this from Azure Portal: IoT Hub -> Devices -> ESP32-b330671e -> Connection String (primary)
-// Format: HostName=aquasense-hub-unique.azure-devices.net;DeviceId=ESP32-b330671e;SharedAccessKey=xxxxx
-const char* IOT_HUB_HOST = "aquasense-hub-unique.azure-devices.net";
-const char* DEVICE_ID = "ESP32-b330671e";
-const char* DEVICE_KEY = "8rGQRnkIQ1I/eW+flPtDh4QwcFdlZg7/EBY/9x9656U="; // Extract from connection string
+/* ---------------- CLOUD SETTINGS ---------------- */
+// Use your laptop/server LAN IP where AquaSense Next.js runs.
+// Example: http://192.168.137.1:3000/api/telemetry/ingest
+const char* TELEMETRY_URL = "http://192.168.137.1:3000/api/telemetry/ingest";
 
-// ===== Flow Sensor Configuration =====
-const int FLOW_SENSOR_PIN = 4;
-const unsigned long SEND_INTERVAL_MS = 5000; // Send every 5 seconds
+// Required by AquaSense ingest route as x-device-token or Bearer token.
+const char* DEVICE_TOKEN = "REPLACE_WITH_DEVICE_TOKEN";
 
-// ===== Global Variables =====
-volatile unsigned long pulseCount = 0;
-unsigned long lastSendAt = 0;
-WiFiClientSecure wifiClient;
-PubSubClient mqttClient(wifiClient);
-char mqttTopic[128];
-char mqttClientId[128];
+/* ---------------- PIN DEFINITIONS ---------------- */
+#define FLOW_SENSOR_PIN 27
+#define RELAY_PIN 26
+#define BUTTON_PIN 25
 
-// ===== Interrupt Handler =====
-void IRAM_ATTR onPulse() {
-  pulseCount++;
+/* ---------------- FLOW VARIABLES ---------------- */
+volatile uint32_t totalPulses = 0;
+volatile uint32_t windowPulses = 0;
+
+float flowRateLMin = 0.0f;
+float totalLiters = 0.0f;
+float litersThisCycle = 0.0f;
+
+unsigned long previousFlowMillis = 0;
+const unsigned long flowIntervalMs = 1000;
+
+// YF-S201 pulses per liter. Tune for your sensor.
+float calibrationFactor = 450.0f;
+
+float targetVolume = 0.5f;
+
+bool filling = false;
+uint32_t cycleStartPulses = 0;
+
+/* ---------------- BUTTON DEBOUNCE ---------------- */
+bool lastButtonReading = HIGH;
+bool stableButtonState = HIGH;
+unsigned long lastDebounceMs = 0;
+const unsigned long debounceMs = 40;
+
+/* ---------------- INTERRUPT ---------------- */
+void IRAM_ATTR pulseCounter() {
+  totalPulses++;
+  windowPulses++;
 }
 
-// ===== WiFi Connection =====
+/* ---------------- HELPERS ---------------- */
+uint32_t readTotalPulses() {
+  noInterrupts();
+  uint32_t p = totalPulses;
+  interrupts();
+  return p;
+}
+
+uint32_t readAndResetWindowPulses() {
+  noInterrupts();
+  uint32_t p = windowPulses;
+  windowPulses = 0;
+  interrupts();
+  return p;
+}
+
+void setPump(bool on) {
+  // If your relay module is active-LOW, invert this.
+  digitalWrite(RELAY_PIN, on ? HIGH : LOW);
+}
+
 void connectWiFi() {
-  Serial.print("Connecting to WiFi: ");
-  Serial.println(WIFI_SSID);
-  
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
+
+  Serial.print("Connecting WiFi");
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
+
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && (millis() - start) < 15000) {
+    delay(400);
     Serial.print(".");
-    attempts++;
   }
-  
+
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\nWiFi Connected!");
+    Serial.println("\nWiFi Connected");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\nFailed to connect to WiFi");
+    Serial.println("\nWiFi connect timeout");
   }
 }
 
-// ===== MQTT Connection =====
-void connectToAzureIoT() {
-  Serial.println("Connecting to Azure IoT Hub...");
-  
-  // Set time for SSL verification
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t now = time(nullptr);
-  while (now < 24 * 3600) {
-    delay(100);
-    now = time(nullptr);
+bool sendDataToCloud(uint32_t pulsesDelta) {
+  connectWiFi();
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Telemetry skipped: WiFi unavailable");
+    return false;
   }
-  Serial.print("Time set to: ");
-  Serial.println(ctime(&now));
-  
-  // Use Azure public cert
-  wifiClient.setInsecure(); // For development; use proper cert in production
-  
-  // Setup MQTT client
-  snprintf(mqttClientId, sizeof(mqttClientId), "%s/%s/", IOT_HUB_HOST, DEVICE_ID);
-  snprintf(mqttTopic, sizeof(mqttTopic), "devices/%s/messages/events/", DEVICE_ID);
-  
-  mqttClient.setServer(IOT_HUB_HOST, 8883);
-  
-  // Generate SAS token (simplified - should use proper SAS token generation)
-  // For now, we'll use the device key directly with Azure format
-  String username = IOT_HUB_HOST;
-  username += "/";
-  username += DEVICE_ID;
-  username += "/?api-version=2021-04-12";
-  
-  if (mqttClient.connect(mqttClientId, username.c_str(), DEVICE_KEY)) {
-    Serial.println("Connected to Azure IoT Hub!");
+
+  HTTPClient http;
+  http.begin(TELEMETRY_URL);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-device-token", DEVICE_TOKEN);
+
+  String body = "{";
+  body += "\"pulses\":";
+  body += String((unsigned long)pulsesDelta);
+  body += ",\"flowRate\":";
+  body += String(flowRateLMin, 3);
+  body += "}";
+
+  int code = http.POST(body);
+
+  Serial.print("POST code: ");
+  Serial.println(code);
+
+  if (code > 0) {
+    String response = http.getString();
+    Serial.print("Response: ");
+    Serial.println(response);
+  } else {
+    Serial.print("HTTP error: ");
+    Serial.println(http.errorToString(code));
+  }
+
+  http.end();
+  return code >= 200 && code < 300;
+}
+
+void updateFlowRate() {
+  unsigned long now = millis();
+  unsigned long elapsed = now - previousFlowMillis;
+  if (elapsed < flowIntervalMs) {
     return;
   }
-  
-  Serial.print("Failed to connect. Code: ");
-  Serial.println(mqttClient.state());
+
+  uint32_t pulses = readAndResetWindowPulses();
+  previousFlowMillis = now;
+
+  float litersInWindow = pulses / calibrationFactor;
+  flowRateLMin = litersInWindow * (60000.0f / elapsed);
+
+  Serial.print("Flow Rate: ");
+  Serial.print(flowRateLMin, 3);
+  Serial.println(" L/min");
 }
 
-// ===== Send Telemetry to Azure =====
-void sendTelemetry(unsigned long pulses) {
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
+void handleButton() {
+  bool reading = digitalRead(BUTTON_PIN);
+
+  if (reading != lastButtonReading) {
+    lastDebounceMs = millis();
+    lastButtonReading = reading;
   }
-  
-  if (!mqttClient.connected()) {
-    connectToAzureIoT();
-  }
-  
-  if (mqttClient.connected()) {
-    // Create JSON payload
-    StaticJsonDocument<256> doc;
-    doc["deviceId"] = DEVICE_ID;
-    doc["pulses"] = pulses;
-    doc["flowRate"] = pulses * 0.133f; // Approximation for demo UX
-    doc["timestamp"] = millis() / 1000;
-    
-    // Serialize to string
-    String payload;
-    serializeJson(doc, payload);
-    
-    // Publish to Azure IoT Hub
-    bool success = mqttClient.publish(mqttTopic, payload.c_str());
-    
-    Serial.print("Telemetry sent: ");
-    Serial.print(success ? "✓" : "✗");
-    Serial.print(" | Pulses: ");
-    Serial.print(pulses);
-    Serial.print(" | Payload: ");
-    Serial.println(payload);
-  } else {
-    Serial.println("MQTT not connected, cannot send telemetry");
+
+  if ((millis() - lastDebounceMs) > debounceMs && reading != stableButtonState) {
+    stableButtonState = reading;
+
+    if (stableButtonState == LOW && !filling) {
+      Serial.println("Filling Bottle...");
+      cycleStartPulses = readTotalPulses();
+      litersThisCycle = 0.0f;
+      filling = true;
+      setPump(true);
+    }
   }
 }
 
-// ===== Setup =====
+void updateFilling() {
+  if (!filling) {
+    return;
+  }
+
+  uint32_t current = readTotalPulses();
+  uint32_t cyclePulses = current - cycleStartPulses;
+  litersThisCycle = cyclePulses / calibrationFactor;
+
+  Serial.print("Filled: ");
+  Serial.print(litersThisCycle, 3);
+  Serial.println(" L");
+
+  if (litersThisCycle >= targetVolume) {
+    setPump(false);
+    filling = false;
+
+    totalLiters = current / calibrationFactor;
+
+    Serial.println("Bottle Filled!");
+    Serial.print("Total Usage: ");
+    Serial.print(totalLiters, 3);
+    Serial.println(" L");
+
+    sendDataToCloud(cyclePulses);
+  }
+}
+
+/* ---------------- SETUP ---------------- */
 void setup() {
   Serial.begin(115200);
-  delay(1000);
-  
-  Serial.println("\n\nAquaSense ESP32 - Azure IoT Hub Edition");
-  Serial.println("=========================================");
-  
-  // Setup flow sensor
-  pinMode(FLOW_SENSOR_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), onPulse, FALLING);
-  
-  Serial.println("Flow sensor initialized on GPIO " + String(FLOW_SENSOR_PIN));
-  
-  // Connect to WiFi
+
+  pinMode(FLOW_SENSOR_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  setPump(false);
+  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR_PIN), pulseCounter, RISING);
+
   connectWiFi();
-  
-  // Connect to Azure IoT Hub
-  delay(1000);
-  connectToAzureIoT();
+  previousFlowMillis = millis();
+
+  Serial.println("AquaSense ESP32 ready");
 }
 
-// ===== Main Loop =====
+/* ---------------- LOOP ---------------- */
 void loop() {
-  // Keep MQTT connection alive
-  if (!mqttClient.connected()) {
-    delay(1000);
-    connectToAzureIoT();
-  }
-  mqttClient.loop();
-  
+  handleButton();
+  updateFlowRate();
+  updateFilling();
+
+  // Lightweight reconnect checks.
+  static unsigned long lastReconnectCheck = 0;
   unsigned long now = millis();
-  
-  // Send telemetry at intervals
-  if (now - lastSendAt >= SEND_INTERVAL_MS) {
-    noInterrupts();
-    unsigned long pulses = pulseCount;
-    pulseCount = 0;
-    interrupts();
-    
-    if (pulses > 0 || lastSendAt == 0) { // Send even if 0 pulses on first send
-      sendTelemetry(pulses);
-    }
-    
-    lastSendAt = now;
+  if (now - lastReconnectCheck > 5000) {
+    lastReconnectCheck = now;
+    connectWiFi();
   }
-  
-  delay(10);
+
+  delay(20);
 }
