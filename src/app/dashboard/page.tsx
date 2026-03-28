@@ -1,4 +1,5 @@
 import dynamic from "next/dynamic";
+import { redirect } from "next/navigation";
 import { AquaLogo } from "@/components/AquaLogo";
 import { LogoutButton } from "@/components/LogoutButton";
 import { SeedDataButton } from "@/components/SeedDataButton";
@@ -69,7 +70,7 @@ export default async function DashboardPage() {
   ]);
 
   if (!user) {
-    return null;
+    redirect("/login");
   }
 
   const device = user.devices[0] ?? null;
