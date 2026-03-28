@@ -93,7 +93,7 @@ Open `http://localhost:3000`.
 
 Headers:
 
-- `x-device-token: <device_token_from_dashboard>`
+- `x-device-token: <device_token_provisioned_during_installation>`
 
 Body:
 
@@ -133,7 +133,13 @@ Use [esp32/esp32_flow_sender.ino](esp32/esp32_flow_sender.ino). Update:
 - `WIFI_SSID`
 - `WIFI_PASSWORD`
 - `API_URL`
-- `DEVICE_TOKEN` (shown in dashboard)
+- `DEVICE_TOKEN` (installer/developer setup only; not entered by end users)
+
+## End-User Experience
+
+- Customers do not edit code and do not enter tokens.
+- Token provisioning is done once during device installation/firmware flashing.
+- After setup, telemetry is automatic and users only interact with the AquaSave dashboard.
 
 ## Azure Setup (Professor-ready)
 

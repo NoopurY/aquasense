@@ -146,16 +146,16 @@ export default async function DashboardPage() {
         </article>
 
         <article className="glass-card">
-          <h3 className="mb-3 text-2xl font-semibold">Device Credentials</h3>
+          <h3 className="mb-3 text-2xl font-semibold">Device Status</h3>
           {device ? (
             <div className="space-y-2 text-sm text-cyan-100">
               <p>
                 Device ID: <span className="font-semibold text-cyan-300">{device.deviceId}</span>
               </p>
               <p>
-                ESP32 Token: <span className="break-all font-semibold text-cyan-300">{device.ingestToken}</span>
+                Provisioning: <span className="font-semibold text-emerald-300">Configured</span>
               </p>
-              <p className="text-cyan-100/70">Send telemetry to /api/telemetry/ingest using this token.</p>
+              <p className="text-cyan-100/70">Your device is linked and sends telemetry automatically. No manual token entry is needed.</p>
             </div>
           ) : (
             <p>No device configured.</p>
