@@ -2,15 +2,11 @@
 #include <HTTPClient.h>
 
 /* ---------------- WIFI SETTINGS ---------------- */
-const char* WIFI_SSID = "NOOPUR Y";
+const char* WIFI_SSID = "NOOPUR Y.";
 const char* WIFI_PASSWORD = "1206NOOPUR";
 
 /* ---------------- CLOUD SETTINGS ---------------- */
-// Use your laptop/server LAN IP where AquaSense Next.js runs.
-// Example: http://192.168.137.1:3000/api/telemetry/ingest
 const char* TELEMETRY_URL = "http://192.168.137.1:3000/api/telemetry/ingest";
-
-// Required by AquaSense ingest route as x-device-token or Bearer token.
 const char* DEVICE_TOKEN = "f8db8f2e0f7b4054b54619535c2454eb";
 
 /* ---------------- PIN DEFINITIONS ---------------- */
@@ -35,14 +31,16 @@ unsigned long lastWiFiBeginMs = 0;
 unsigned long wifiAttemptStartMs = 0;
 bool wifiConnectInProgress = false;
 
-// YF-S201 pulses per liter. Tune for your sensor.
+// YF-S201 pulses per liter. Tune if needed.
 float calibrationFactor = 450.0f;
-
 float targetVolume = 0.5f;
 
 bool filling = false;
 uint32_t cycleStartPulses = 0;
 unsigned long lastFillLogMs = 0;
+unsigned long lastCloudSendMs = 0;
+uint32_t lastCloudSentTotalPulses = 0;
+const unsigned long cloudSendIntervalMs = 5000;
 
 /* ---------------- BUTTON DEBOUNCE ---------------- */
 bool lastButtonReading = HIGH;
@@ -52,7 +50,7 @@ const unsigned long debounceMs = 40;
 
 /* ---------------- INTERRUPT ---------------- */
 void IRAM_ATTR pulseCounter() {
-  // Ignore sub-millisecond spikes caused by electrical noise.
+  // Ignore very fast spikes from electrical noise
   uint32_t nowUs = micros();
   if (nowUs - lastPulseMicros < 800) {
     return;
@@ -80,7 +78,7 @@ uint32_t readAndResetWindowPulses() {
 }
 
 void setPump(bool on) {
-  // If your relay module is active-LOW, invert this.
+  // If your relay module is active-LOW, invert this line
   digitalWrite(RELAY_PIN, on ? HIGH : LOW);
 }
 
@@ -94,7 +92,7 @@ void connectWiFi() {
 
   unsigned long now = millis();
 
-  // If a connect attempt is in progress, wait for success or timeout.
+  // Wait for current attempt to finish or timeout
   if (wifiConnectInProgress) {
     if (status == WL_CONNECTED) {
       wifiConnectInProgress = false;
@@ -179,6 +177,32 @@ bool sendDataToCloud(uint32_t pulsesDelta) {
   return code >= 200 && code < 300;
 }
 
+void sendTelemetryIfDue() {
+  unsigned long now = millis();
+  if (now - lastCloudSendMs < cloudSendIntervalMs) {
+    return;
+  }
+
+  uint32_t currentTotal = readTotalPulses();
+  uint32_t deltaPulses = currentTotal - lastCloudSentTotalPulses;
+
+  // Skip empty packets unless currently filling.
+  if (deltaPulses == 0 && !filling) {
+    lastCloudSendMs = now;
+    return;
+  }
+
+  bool ok = sendDataToCloud(deltaPulses);
+  if (ok) {
+    lastCloudSentTotalPulses = currentTotal;
+    lastCloudSendMs = now;
+    Serial.print("Cloud sync ok. Pulses sent: ");
+    Serial.println((unsigned long)deltaPulses);
+  } else {
+    Serial.println("Cloud sync failed. Will retry.");
+  }
+}
+
 void updateFlowRate() {
   unsigned long now = millis();
   unsigned long elapsed = now - previousFlowMillis;
@@ -192,8 +216,14 @@ void updateFlowRate() {
   float litersInWindow = pulses / calibrationFactor;
   flowRateLMin = litersInWindow * (60000.0f / elapsed);
 
-  // Show flow continuously only while filling to avoid idle confusion.
-  if (filling) {
+  // Print pulse activity even if filling is not started by button
+  if (pulses > 0) {
+    Serial.print("Pulse/s: ");
+    Serial.print((unsigned long)pulses);
+    Serial.print(" | Flow Rate: ");
+    Serial.print(flowRateLMin, 3);
+    Serial.println(" L/min");
+  } else if (filling) {
     Serial.print("Flow Rate: ");
     Serial.print(flowRateLMin, 3);
     Serial.println(" L/min");
@@ -273,9 +303,12 @@ void setup() {
 
   connectWiFi();
   previousFlowMillis = millis();
+  lastCloudSendMs = millis();
+  lastCloudSentTotalPulses = readTotalPulses();
 
   Serial.println("AquaSense ESP32 ready");
-  Serial.println("Press button on GPIO25 to start motor and pulse counting");
+  Serial.println("Press button on GPIO25 to start automatic filling cycle");
+  Serial.println("If motor is started manually, Pulse/s logs appear when pulses are detected");
 }
 
 /* ---------------- LOOP ---------------- */
@@ -283,8 +316,8 @@ void loop() {
   handleButton();
   updateFlowRate();
   updateFilling();
+  sendTelemetryIfDue();
 
-  // Lightweight reconnect checks.
   static unsigned long lastReconnectCheck = 0;
   unsigned long now = millis();
   if (now - lastReconnectCheck > 5000) {

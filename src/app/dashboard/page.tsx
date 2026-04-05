@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 import { SeedDataButton } from "@/components/SeedDataButton";
 import { CountUp } from "@/components/ui/CountUp";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { DashboardAutoRefresh } from "@/components/DashboardAutoRefresh";
 import { requireSessionUser } from "@/lib/auth";
 import { computeBillFromLiters } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
@@ -86,6 +87,7 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-7xl px-5 py-6 md:px-8 md:py-10">
+      <DashboardAutoRefresh intervalMs={5000} />
       <section className="mb-5 rounded-full border border-[var(--border-hover)] bg-[rgba(3,18,36,0.8)] px-4 py-2 text-xs uppercase tracking-[0.16em] text-cyan-100 md:text-sm">
         <div className="flex flex-wrap items-center gap-3">
           <span className="inline-flex items-center gap-2 text-emerald-200">
