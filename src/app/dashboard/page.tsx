@@ -6,6 +6,7 @@ import { SeedDataButton } from "@/components/SeedDataButton";
 import { CountUp } from "@/components/ui/CountUp";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { DashboardAutoRefresh } from "@/components/DashboardAutoRefresh";
+import { RecentReadingsFeed } from "@/components/RecentReadingsFeed";
 import { requireSessionUser } from "@/lib/auth";
 import { computeBillFromLiters } from "@/lib/billing";
 import { prisma } from "@/lib/prisma";
@@ -137,19 +138,12 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mb-6 grid gap-6 lg:grid-cols-3">
-        <article className="glass-card lg:col-span-2">
-          <h3 className="mb-4 text-2xl font-semibold">Slab Billing Summary</h3>
-          <div className="space-y-2 text-cyan-100 md:text-[1.02rem]">
-            <p>Usage this month: {bill.usageKL.toFixed(2)} KL</p>
-            <p>First 8 KL: Rs {bill.first8.toFixed(2)}</p>
-            <p>Next 12 KL: Rs {bill.next12.toFixed(2)}</p>
-            <p>Above 20 KL: Rs {bill.above20.toFixed(2)}</p>
-            <p className="pt-2 text-xl font-bold text-white">Total Bill: Rs {bill.total.toFixed(2)}</p>
-          </div>
+        <article className="lg:col-span-2">
+          <RecentReadingsFeed userId={session.userId} />
         </article>
 
         <article className="glass-card">
-          <h3 className="mb-3 text-2xl font-semibold">Device Status</h3>
+          <h3 className="mb-4 text-2xl font-semibold">Device Status</h3>
           {device ? (
             <div className="space-y-2 text-sm text-cyan-100">
               <p>
@@ -165,6 +159,18 @@ export default async function DashboardPage() {
           )}
         </article>
       </section>
+
+      <section className="mb-6 grid gap-6 lg:grid-cols-3">
+        <article className="glass-card lg:col-span-2">
+          <h3 className="mb-4 text-2xl font-semibold">Slab Billing Summary</h3>
+          <div className="space-y-2 text-cyan-100 md:text-[1.02rem]">
+            <p>Usage this month: {bill.usageKL.toFixed(2)} KL</p>
+            <p>First 8 KL: Rs {bill.first8.toFixed(2)}</p>
+            <p>Next 12 KL: Rs {bill.next12.toFixed(2)}</p>
+            <p>Above 20 KL: Rs {bill.above20.toFixed(2)}</p>
+            <p className="pt-2 text-xl font-bold text-white">Total Bill: Rs {bill.total.toFixed(2)}</p>
+          </div>
+        </article>
 
       <DashboardCharts averageFlow={2.1} dailyUsage={dailyUsage} slabDistribution={slabDistribution} />
     </main>
