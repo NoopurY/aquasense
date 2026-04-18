@@ -171,6 +171,7 @@ export default async function DashboardPage() {
             <p className="pt-2 text-xl font-bold text-white">Total Bill: Rs {bill.total.toFixed(2)}</p>
           </div>
         </article>
+      </section>
 
       <DashboardCharts averageFlow={2.1} dailyUsage={dailyUsage} slabDistribution={slabDistribution} />
     </main>
