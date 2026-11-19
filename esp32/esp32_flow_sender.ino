@@ -1,13 +1,14 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 /* ---------------- WIFI SETTINGS ---------------- */
 const char* WIFI_SSID = "NOOPUR Y.";
 const char* WIFI_PASSWORD = "1206NOOPUR";
 
 /* ---------------- CLOUD SETTINGS ---------------- */
-const char* TELEMETRY_URL = "http://192.168.137.1:3000/api/telemetry/ingest";
-const char* DEVICE_TOKEN = "f8db8f2e0f7b4054b54619535c2454eb";
+const char* TELEMETRY_URL = "https://aquasense-teal.vercel.app/api/telemetry/ingest";
+const char* DEVICE_TOKEN = "603e982158244cdd8298c9a9b14a5198";
 
 /* ---------------- PIN DEFINITIONS ---------------- */
 #define FLOW_SENSOR_PIN 27
@@ -31,6 +32,12 @@ unsigned long lastWiFiBeginMs = 0;
 unsigned long wifiAttemptStartMs = 0;
 bool wifiConnectInProgress = false;
 
+enum CloudSendResult {
+  CLOUD_SEND_OK,
+  CLOUD_SEND_NO_WIFI,
+  CLOUD_SEND_HTTP_ERROR
+};
+
 // YF-S201 pulses per liter. Tune if needed.
 float calibrationFactor = 450.0f;
 float targetVolume = 0.5f;
@@ -41,6 +48,8 @@ unsigned long lastFillLogMs = 0;
 unsigned long lastCloudSendMs = 0;
 uint32_t lastCloudSentTotalPulses = 0;
 const unsigned long cloudSendIntervalMs = 5000;
+const unsigned long noWiFiLogIntervalMs = 30000;
+unsigned long lastNoWiFiLogMs = 0;
 
 /* ---------------- BUTTON DEBOUNCE ---------------- */
 bool lastButtonReading = HIGH;
@@ -108,7 +117,8 @@ void connectWiFi() {
     WiFi.disconnect();
   }
 
-  if (now - lastWiFiBeginMs < wifiRetryIntervalMs) {
+  // Allow the very first WiFi.begin immediately after boot.
+  if (lastWiFiBeginMs != 0 && now - lastWiFiBeginMs < wifiRetryIntervalMs) {
     return;
   }
 
@@ -140,15 +150,36 @@ void logWiFiStatus() {
   }
 }
 
-bool sendDataToCloud(uint32_t pulsesDelta) {
+CloudSendResult sendDataToCloud(uint32_t pulsesDelta) {
   connectWiFi();
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Telemetry skipped: WiFi unavailable");
-    return false;
+    unsigned long now = millis();
+    if (lastNoWiFiLogMs == 0 || now - lastNoWiFiLogMs >= noWiFiLogIntervalMs) {
+      Serial.println("Telemetry skipped: WiFi unavailable");
+      lastNoWiFiLogMs = now;
+    }
+    return CLOUD_SEND_NO_WIFI;
   }
 
+  lastNoWiFiLogMs = 0;
+
   HTTPClient http;
-  http.begin(TELEMETRY_URL);
+  bool beginOk = false;
+
+  if (String(TELEMETRY_URL).startsWith("https://")) {
+    // Vercel endpoint uses TLS; allow connection without storing cert on device.
+    static WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+    beginOk = http.begin(secureClient, TELEMETRY_URL);
+  } else {
+    beginOk = http.begin(TELEMETRY_URL);
+  }
+
+  if (!beginOk) {
+    Serial.println("HTTP begin failed");
+    return CLOUD_SEND_HTTP_ERROR;
+  }
+
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-token", DEVICE_TOKEN);
 
@@ -174,7 +205,10 @@ bool sendDataToCloud(uint32_t pulsesDelta) {
   }
 
   http.end();
-  return code >= 200 && code < 300;
+  if (code >= 200 && code < 300) {
+    return CLOUD_SEND_OK;
+  }
+  return CLOUD_SEND_HTTP_ERROR;
 }
 
 void sendTelemetryIfDue() {
@@ -192,13 +226,13 @@ void sendTelemetryIfDue() {
     return;
   }
 
-  bool ok = sendDataToCloud(deltaPulses);
-  if (ok) {
+  CloudSendResult result = sendDataToCloud(deltaPulses);
+  if (result == CLOUD_SEND_OK) {
     lastCloudSentTotalPulses = currentTotal;
     lastCloudSendMs = now;
     Serial.print("Cloud sync ok. Pulses sent: ");
     Serial.println((unsigned long)deltaPulses);
-  } else {
+  } else if (result == CLOUD_SEND_HTTP_ERROR) {
     Serial.println("Cloud sync failed. Will retry.");
   }
 }
